@@ -258,6 +258,8 @@ class Enemy(pg.sprite.Sprite):
         self.rect.move_ip(self.vx, self.vy)
 
 
+
+
 class Score:
     """
     打ち落とした爆弾，敵機の数をスコアとして表示するクラス
@@ -277,6 +279,49 @@ class Score:
         screen.blit(self.image, self.rect)
 
 
+class Gravity(pg.sprite.Sprite):
+    """
+    重力場を表現するクラス
+    """
+    def __init__(self, life: int):
+        """
+        半透明の重力場を作成する
+        引数 life: 重力場の寿命（フレーム数）
+        """
+        super().__init__()
+        self.image = pg.Surface((WIDTH, HEIGHT))  # 画面全体のSurface
+        self.image.fill((0, 0, 0))  # 黒色で塗りつぶす
+        self.image.set_alpha(128)  # 透明度を設定（0:完全透明, 255:不透明）
+        self.rect = self.image.get_rect()
+        self.life = life
+
+    def update(self, bombs: pg.sprite.Group, emys: pg.sprite.Group, screen: pg.Surface, exps: pg.sprite.Group, score: int):
+        """
+        重力場の寿命を減少させ、範囲内の爆弾と飛行船を撃墜する
+        引数 bombs: 爆弾のスプライトグループ
+        引数 emys: 飛行船のスプライトグループ
+        引数 screen: 画面Surface
+        引数 exps: 爆発エフェクトのスプライトグループ
+        引数 score: スコアオブジェクト
+        """
+        for bomb in bombs:
+            # 爆弾を削除し、爆発エフェクトを追加
+            exps.add(Explosion(bomb, 50))
+            score.value += 1  # スコアを加算
+            bomb.kill()
+
+        for emy in emys:
+            # 飛行船を削除し、爆発エフェクトを追加
+            exps.add(Explosion(emy, 100))
+            score.value += 10  # スコアを加算
+            emy.kill()
+
+        self.life -= 1
+        if self.life <= 0:  # 寿命が尽きたら削除
+            self.kill()
+        screen.blit(self.image, self.rect)  # 重力場を描画
+
+
 def main():
     pg.display.set_caption("真！こうかとん無双")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
@@ -288,6 +333,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
+    gravities = pg.sprite.Group()  # 重力場のスプライトグループ
 
 
     tmr = 0
@@ -303,23 +349,28 @@ def main():
             if event.type == pg.KEYDOWN and event.key ==pg.K_e and score.value >= 1:
                 EMP(emys, bombs, screen)  # スコアが20以上ならEMP発動
                 score.value -= 1  # スコアを消費
+
+
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_SPACE:
+                    beams.add(Beam(bird))
+                if event.key == pg.K_g and score.value >= 200:  # Gキーで重力場を発動
+                    gravities.add(Gravity(400))
+                    score.value -= 200  # スコアを消費
+
         screen.blit(bg_img, [0, 0])
 
-
-
-
-        if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
+        if tmr % 200 == 0:  # 200フレームに1回、敵機を出現させる
             emys.add(Enemy())
 
         for emy in emys:
-            if emy.state == "stop" and tmr%emy.interval == 0:
-                # 敵機が停止状態に入ったら，intervalに応じて爆弾投下
+            if emy.state == "stop" and tmr % emy.interval == 0:
                 bombs.add(Bomb(emy, bird))
 
-        for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():  # ビームと衝突した敵機リスト
-            exps.add(Explosion(emy, 100))  # 爆発エフェクト
-            score.value += 10  # 10点アップ
-            bird.change_img(6, screen)  # こうかとん喜びエフェクト
+        for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():  # ビームと衝突した敵機
+            exps.add(Explosion(emy, 100))
+            score.value += 10
+            bird.change_img(6, screen)
 
         for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():  # ビームと衝突した爆弾リスト
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
@@ -330,11 +381,18 @@ def main():
             if bomb.state == "inactive":
                 continue
             bird.change_img(8, screen)  # こうかとん悲しみエフェクト
+        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():  # ビームと衝突した爆弾
+            exps.add(Explosion(bomb, 50))
+            score.value += 1
+
+        for bomb in pg.sprite.spritecollide(bird, bombs, True):  # こうかとんと衝突した爆弾
+            bird.change_img(8, screen)
             score.update(screen)
             pg.display.update()
             time.sleep(2)
             return
 
+        # 各要素の更新
         bird.update(key_lst, screen)
         beams.update()
         beams.draw(screen)
@@ -342,6 +400,7 @@ def main():
         emys.draw(screen)
         bombs.update()
         bombs.draw(screen)
+        gravities.update(bombs, emys, screen, exps, score)  # 重力場の更新
         exps.update()
         exps.draw(screen)
         score.update(screen)
