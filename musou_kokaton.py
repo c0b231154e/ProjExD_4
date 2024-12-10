@@ -454,16 +454,13 @@ def main():
             if bomb.state == "inactive":
                 continue
             bird.change_img(8, screen)  # こうかとん悲しみエフェクト
-        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():  # ビームと衝突した爆弾
-            exps.add(Explosion(bomb, 50))
-            score.value += 1
-
-        for bomb in pg.sprite.spritecollide(bird, bombs, True):  # こうかとんと衝突した爆弾
-            bird.change_img(8, screen)
             score.update(screen)
             pg.display.update()
             time.sleep(2)
             return
+        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():  # ビームと衝突した爆弾
+            exps.add(Explosion(bomb, 50))
+            score.value += 1
 
         # 各要素の更新
         for shield in pg.sprite.groupcollide(shields, bombs, False, True).keys():
