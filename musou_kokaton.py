@@ -241,6 +241,36 @@ class Score:
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)
 
+class Shield(pg.sprite.Sprite):
+    """
+    防御壁に関するクラス
+    """
+    def __init__(self, bird: Bird, life: int):
+        """
+        防御壁を生成する
+        引数1 bird：防御壁を設置するこうかとん
+        引数2 life：防御壁の寿命
+        """
+        super().__init__()
+        self.life = life
+
+        self.image = pg.Surface((20, bird.rect.height * 2), pg.SRCALPHA)
+    
+        pg.draw.rect(self.image, (0, 0, 255), (0, 0, 20, bird.rect.height * 2))
+        vx, vy = bird.dire
+        angle = math.degrees(math.atan2(-vy, vx))
+        self.image = pg.transform.rotozoom(self.image, angle, 1.0)
+        self.rect = self.image.get_rect()
+        offset_x = vx * bird.rect.width
+        offset_y = vy * bird.rect.height
+        self.rect.centerx = bird.rect.centerx + offset_x
+        self.rect.centery = bird.rect.centery + offset_y
+
+    def update(self):
+
+        self.life -= 1
+        if self.life < 0:
+            self.kill()
 
 def main():
     pg.display.set_caption("真！こうかとん無双")
@@ -253,6 +283,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
+    shields = pg.sprite.Group()  
 
     tmr = 0
     clock = pg.time.Clock()
@@ -261,34 +292,44 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
-            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-                beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_SPACE:
+                    beams.add(Beam(bird))  # ビーム発射
+                if event.key == pg.K_s:
+                    if score.value >= 50 and not shields:
+                        shields.add(Shield(bird, 400))  
+                        score.value -= 50  
+
         screen.blit(bg_img, [0, 0])
 
-        if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
+        if tmr % 200 == 0:  # 200フレームに1回、敵機を出現させる
             emys.add(Enemy())
 
         for emy in emys:
-            if emy.state == "stop" and tmr%emy.interval == 0:
-                # 敵機が停止状態に入ったら，intervalに応じて爆弾投下
+            if emy.state == "stop" and tmr % emy.interval == 0:
+                # 敵機が停止状態に入ったら、intervalに応じて爆弾投下
                 bombs.add(Bomb(emy, bird))
 
-        for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():  # ビームと衝突した敵機リスト
+        for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():
             exps.add(Explosion(emy, 100))  # 爆発エフェクト
             score.value += 10  # 10点アップ
             bird.change_img(6, screen)  # こうかとん喜びエフェクト
 
-        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():  # ビームと衝突した爆弾リスト
+        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.value += 1  # 1点アップ
 
-        for bomb in pg.sprite.spritecollide(bird, bombs, True):  # こうかとんと衝突した爆弾リスト
+        for bomb in pg.sprite.spritecollide(bird, bombs, True):
             bird.change_img(8, screen)  # こうかとん悲しみエフェクト
             score.update(screen)
             pg.display.update()
             time.sleep(2)
             return
 
+        for shield in pg.sprite.groupcollide(shields, bombs, False, True).keys():
+            exps.add(Explosion(shield, 30))  # 衝突時に爆発エフェクト
+
+        # 各オブジェクトの更新と描画
         bird.update(key_lst, screen)
         beams.update()
         beams.draw(screen)
@@ -298,6 +339,8 @@ def main():
         bombs.draw(screen)
         exps.update()
         exps.draw(screen)
+        shields.update()  
+        shields.draw(screen)  
         score.update(screen)
         pg.display.update()
         tmr += 1
